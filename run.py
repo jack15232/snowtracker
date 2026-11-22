@@ -139,6 +139,10 @@ def main():
 
     if do_obs:
         parts["obs"] = obs.fetch_stations()
+        try:
+            parts["webcams"] = obs.probe_webcams()
+        except Exception as e:
+            print("webcam probe failed:", e, file=sys.stderr)
         mark(state, "obs")
     if do_av:
         parts["avalanche"] = obs.fetch_avalanche()
@@ -149,6 +153,7 @@ def main():
 
     out = summary.build(results, parts.get("status", []), reg, parts.get("obs"), parts.get("avalanche"))
     out["regime_error"] = parts.get("regime_error")
+    out["webcams"] = parts.get("webcams")
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     (config.DATA_DIR / "summary.json").write_text(json.dumps(out, separators=(",", ":")))
     cache_path.parent.mkdir(parents=True, exist_ok=True)

@@ -111,3 +111,32 @@ def fetch_avalanche():
             "published_at": hit.get("publicationTime"),
         })
     return out
+
+
+def probe_webcams():
+    """Check each webcam image is reachable and how fresh it is (Last-Modified)."""
+    import urllib.request
+    from email.utils import parsedate_to_datetime
+    out = []
+    for cam in config.WEBCAMS:
+        url = config.WEBCAM_BASE + cam["path"]
+        rec = {k: cam[k] for k in ("id", "name", "elev", "page")}
+        rec.update(url=url, ok=False)
+        try:
+            req = urllib.request.Request(url, method="GET", headers={
+                "User-Agent": config.USER_AGENT, "Range": "bytes=0-2047",
+                "Referer": "https://monterosaski.eu/"})
+            with urllib.request.urlopen(req, timeout=15) as r:
+                ctype = r.headers.get("Content-Type", "")
+                lm = r.headers.get("Last-Modified")
+                head = r.read(4)
+            rec["ok"] = ctype.startswith("image/") or head[:3] == b"\xff\xd8\xff"
+            if lm:
+                rec["updated"] = int(parsedate_to_datetime(lm).timestamp())
+            if not rec["ok"]:
+                rec["error"] = f"not an image ({ctype})"
+        except Exception as e:
+            rec["error"] = str(e)[:120]
+        out.append(rec)
+    return {"cams": out, "checked_at": int(time.time()), "index": config.WEBCAM_INDEX,
+            "attribution": "Webcams: Monterosa Ski / monterosa2000.it"}

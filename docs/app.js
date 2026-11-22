@@ -75,6 +75,7 @@
     if (stale && !$("banner").classList.contains("bad")) {
       banner(`Your Mac hasn't published since ${fDayHour.format(s.generated_at * 1000)} (Alagna time). It may be asleep or offline, so these numbers are getting old.`, "warn");
     }
+    $("now").innerHTML = nowCard(s.obs) + camsCard(s.webcams);
     $("bands").innerHTML = Object.entries(s.bands).map(([id, b]) =>
       `<button data-band="${id}" aria-pressed="${id === band}">${b.elev}m</button>`).join("");
     const B = s.bands[band];
@@ -86,6 +87,39 @@
       stationsCard(s.obs) + avalancheCard(s.avalanche) + modelsCard(s, B);
     if (hasFc) { timingChart(B); flChart(s, B); }
     $("footer").innerHTML = footer(s);
+  }
+
+
+  function nowCard(obs) {
+    const st = ((obs && obs.stations) || []).filter((x) => x.ok);
+    if (!st.length) return "";
+    const short = { "Bocchetta delle Pisse": "Pisse", "Alagna Miniere": "Alagna", "Passo del Moro": "Passo Moro" };
+    const sign = (v) => (v == null ? "–" : (v > 0 ? "+" : "") + Math.round(v));
+    const order = ["Bocchetta delle Pisse", "Alagna Miniere", "Passo del Moro"];
+    st.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+    const latest = Math.max(...st.map((x) => x.hs_time));
+    return `<div class="card"><h2>Snow on the ground now <span class="note">measured ${ago(latest)}</span></h2>
+      <div class="now">${st.map((x) => `<div class="tile">
+        <div class="t">${esc(short[x.name] || x.name)} ${x.elev}m</div>
+        <div class="n">${Math.round(x.hs_cm)}<small> cm</small></div>
+        <div class="c">${sign(x.d24)} cm in 24h</div></div>`).join("")}</div>
+      <div class="axis-note">Total depth from ARPA's automatic snow stations. Passo del Moro is across the ridge above Macugnaga.</div></div>`;
+  }
+
+  function camsCard(w) {
+    if (!w || !w.cams) return "";
+    const live = w.cams.filter((c) => c.ok);
+    const bust = Math.floor(Date.now() / 300000); // new image at most every 5 min
+    const cams = (live.length ? live : w.cams).map((c) => {
+      const fresh = c.updated ? `photo ${ago(c.updated)}` : "";
+      return `<div class="cam"><a href="${esc(c.page)}" target="_blank" rel="noopener">
+        <div class="img"><img src="${esc(c.url)}?t=${bust}" alt="${esc(c.name)} webcam" loading="lazy"
+          onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'off',textContent:'Camera image unavailable. Tap to open the resort page'}))"></div>
+        <div class="cap"><b>${esc(c.name)} · ${c.elev}m</b><span>${fresh}</span></div></a></div>`;
+    }).join("");
+    return `<div class="card"><h2>Webcams <span class="note">swipe · tap to open</span></h2>
+      <div class="cams">${cams}</div>
+      <div class="axis-note"><a href="${esc(w.index)}" target="_blank" rel="noopener" style="color:var(--snow)">All Monterosa Ski webcams</a></div></div>`;
   }
 
   function heroCard(B) {
@@ -285,7 +319,7 @@
         <div class="muted" style="font-size:11.5px;grid-column:1/-1">reading ${fDayHour.format(st.hs_time * 1000)} · 7-day trend</div>
       </div>` : `<div class="st"><div><div class="name">${esc(st.name)} <small>${st.elev}m</small></div>
         <div class="chg muted">No live reading (${esc(st.error || "unavailable")})</div></div></div>`).join("");
-    return `<div class="card"><h2>Snow on the ground <span class="note">ARPA stations</span></h2><div class="stations">${rows}</div>
+    return `<div class="card"><h2>Snow depth, last 7 days <span class="note">ARPA stations</span></h2><div class="stations">${rows}</div>
       <div class="axis-note">Depth changes include settling, so a 24h gain is a rough guide to new snow.</div></div>`;
   }
 
@@ -327,7 +361,7 @@
   }
 
   function footer(s) {
-    return `Forecast data: Open-Meteo (ECMWF, DWD, NOAA, MeteoSwiss). Snow and avalanche data: Arpa Piemonte (CC BY 4.0), AINEVA/EAWS.<br>
+    return `Forecast data: Open-Meteo (ECMWF, DWD, NOAA, MeteoSwiss). Snow and avalanche data: Arpa Piemonte (CC BY 4.0), AINEVA/EAWS. Webcams: Monterosa Ski.<br>
       ${esc(s.method && s.method.snow)}<br>Times are Alagna local time. Built ${fDayHour.format(s.generated_at * 1000)}.`;
   }
 

@@ -72,3 +72,24 @@ FORECAST_EVERY_MIN = 60
 AVALANCHE_EVERY_MIN = 180
 
 USER_AGENT = "snowcast/1.0 (personal ski forecast; github.com)"
+
+# ---- webcams (Monterosa Ski, Alagna side) ----------------------------------
+# Direct JPEGs served by monterosa2000.it (as embedded on monterosaski.eu).
+WEBCAM_BASE = "https://www.monterosa2000.it/webcam/"
+WEBCAMS = [
+    {"id": "pianalunga", "name": "Pianalunga", "elev": 2046, "path": "Pianalunga/001/Pianalunga.jpg",
+     "page": "https://monterosaski.eu/en/webcam/pianalunga-webcam-20743"},
+    {"id": "olen", "name": "Valle Olen", "elev": 2070, "path": "Pianalunga/002/Pianalunga.jpg",
+     "page": "https://monterosaski.eu/en/webcam/valle-olen-webcam-25194"},
+    {"id": "cimalegna", "name": "Cimalegna chairlift", "elev": 2656, "path": "Cimalegna/011/Cimalegna.jpg",
+     "page": "https://monterosaski.eu/en/webcam/seggiovia-cimalegna-webcam-20747"},
+    {"id": "salati_view", "name": "View to Passo dei Salati", "elev": 2656, "path": "Cimalegna/012/Cimalegna.jpg",
+     "page": "https://monterosaski.eu/en/webcam/seggiovia-cimalegna-webcam-20747"},
+    {"id": "monterosa", "name": "Monte Rosa panorama", "elev": 2656, "path": "Cimalegna/013/Cimalegna.jpg",
+     "page": "https://monterosaski.eu/en/webcam/seggiovia-cimalegna-webcam-20747"},
+    {"id": "salati", "name": "Passo dei Salati / Mosso", "elev": 2900, "path": "Mosso/602/Mosso.jpg",
+     "page": "https://monterosaski.eu/en/webcam/stazione-funifor-passo-dei-salati-webcam-25190"},
+    {"id": "valsesia", "name": "Valsesia panorama", "elev": 2656, "path": "Cimalegna/015/Cimalegna.jpg",
+     "page": "https://monterosaski.eu/en/webcam/seggiovia-cimalegna-webcam-20747"},
+]
+WEBCAM_INDEX = "https://monterosaski.eu/en/webcam"
