@@ -137,7 +137,16 @@ def _model_fl(parsed):
     if fl is not None and np.isfinite(fl).any():
         return fl
     t = hb.get("temperature_2m")
-    return None if t is None else 2400 + t / 0.0065
+    if t is None:
+        return None
+    # 2 m temperature carries a surface day/night cycle that the free-air freezing level doesn't:
+    # take a centred 24 h mean (NaN-aware) before converting.
+    k = np.ones(25)
+    ok = np.isfinite(t)
+    num = np.apply_along_axis(lambda r: np.convolve(r, k, mode="same"), 1, np.where(ok, t, 0.0))
+    den = np.apply_along_axis(lambda r: np.convolve(r, k, mode="same"), 1, ok.astype(float))
+    tm = np.where(ok & (den >= 13), num / np.maximum(den, 1), np.nan)
+    return 2400 + tm / 0.0065
 
 
 def freezing_level(results, now, min_models=2):
