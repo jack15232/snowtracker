@@ -512,11 +512,13 @@
   });
   let rz; addEventListener("resize", () => { clearTimeout(rz); rz = setTimeout(() => data && render(), 200); });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "visible" && data && Date.now() / 1000 - data.generated_at > 20 * 60) load();
+    if (document.visibilityState === "visible" && data && Date.now() / 1000 - data.generated_at > 20 * 60) load().then(autoRefresh);
   });
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
 
   data = store.get("snowcast:last");
   if (data) render();
-  load();
+  // With a live-refresh key, opening the app on stale data (>30 min) starts a fresh fetch itself.
+  const autoRefresh = () => { if (token() && data && Date.now() / 1000 - data.generated_at > 30 * 60) refresh(); };
+  load().then(autoRefresh);
 })();
