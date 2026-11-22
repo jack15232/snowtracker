@@ -129,15 +129,27 @@ def regime_for(regime, t0, t1):
     return {"code": code, "label": label, "dir_deg": int(round(d)), "precip_mm": _r(float(p.sum()))}
 
 
-def freezing_level(results, now):
-    """Hourly pooled FL quantiles for the next FORECAST_DAYS (band-independent)."""
-    band = config.BANDS[0]["id"]
+def _model_fl(parsed):
+    """Native freezing level if the model provides it, else derived from 2400 m band temperature
+    (Open-Meteo lapse-corrects T2m at ~6.5 K/km, so FL ~= 2400 + T/0.0065)."""
+    hb = parsed["bands"].get(config.HEADLINE_BAND, {})
+    fl = hb.get("freezing_level_height")
+    if fl is not None and np.isfinite(fl).any():
+        return fl
+    t = hb.get("temperature_2m")
+    return None if t is None else 2400 + t / 0.0065
+
+
+def freezing_level(results, now, min_models=2):
+    """Hourly pooled FL quantiles for the next FORECAST_DAYS. Hours with fewer than min_models
+    are dropped so the tail doesn't jump when models run out."""
     hours = np.arange((now // 3600 + 1) * 3600, now + config.FORECAST_DAYS * 86400, 3600)
+    fls = {mid: _model_fl(p) for mid, p in results.items()}
     out = []
-    for h in hours[::1]:
+    for h in hours:
         per = {}
         for mid, parsed in results.items():
-            fl = parsed["bands"].get(band, {}).get("freezing_level_height")
+            fl = fls[mid]
             if fl is None:
                 continue
             i = np.where(parsed["times"] == h)[0]
@@ -145,10 +157,11 @@ def freezing_level(results, now):
                 col = fl[:, i[0]]
                 if np.isfinite(col).any():
                     per[mid] = col
+        if len(per) < min_models:
+            continue
         vals, wts = _pool(per)
-        if vals.size:
-            q = weighted_quantiles(vals, wts, [0.1, 0.5, 0.9])
-            out.append([int(h), int(q[0]), int(q[1]), int(q[2])])
+        q = weighted_quantiles(vals, wts, [0.1, 0.5, 0.9])
+        out.append([int(h), int(q[0]), int(q[1]), int(q[2])])
     return out
 
 
@@ -202,5 +215,6 @@ def build(results, status, regime, obs, avalanche, now=None):
                     f"snow line {config.SNOWLINE_BELOW_FL_M} m below FL) x temperature-based SLR. "
                     "Models weighted equally; members share their model's weight.",
             "raw_model": "Open-Meteo native snowfall at the gridpoint (no elevation correction).",
+            "freezing_level": "Native where the model provides it; otherwise derived from lapse-corrected 2 m temperature (misses inversions).",
         },
     }

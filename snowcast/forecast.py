@@ -154,6 +154,7 @@ def fetch_all(state):
                 state["signatures"][model["id"]] = sig
                 state.setdefault("run_seen_at", {})[model["id"]] = int(now)
             entry["run_seen_at"] = state.get("run_seen_at", {}).get(model["id"])
+            entry["vars"] = sorted(parsed["bands"].get(config.HEADLINE_BAND, {}).keys())
             entry["members"] = int(next(iter(parsed["bands"].values()))["precipitation"].shape[0])
             valid = np.isfinite(next(iter(parsed["bands"].values()))["precipitation"]).any(axis=0)
             entry["horizon_h"] = int(valid.sum())

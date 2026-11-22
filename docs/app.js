@@ -227,7 +227,7 @@
     card.innerHTML = `<h2>Freezing level</h2><div class="chart"></div>
       <div class="legend"><span><span class="sw" style="background:var(--fl);height:3px"></span>Median</span><span><span class="sw" style="background:var(--fl-range)"></span>80% range</span>
       <span><span class="sw" style="border-top:2px dashed var(--text-2);height:0;border-radius:0"></span>${esc(B.label)}</span></div>
-      <div class="axis-note">Snow usually falls down to about 300m below the freezing level.</div>`;
+      <div class="axis-note">Snow usually falls down to about 300m below the freezing level. MeteoSwiss reports it directly; for other models it is estimated from temperature.</div>`;
     if (fl.length < 2) return;
     const box = card.querySelector(".chart");
     const W = box.clientWidth || 340, H = 170, L = 40, R = 6, T = 10, Bm = 22;
@@ -264,7 +264,7 @@
   function spark(series, W = 300, H = 38) {
     if (!series || series.length < 2) return "";
     const v = series.map((p) => p[1]);
-    const lo = Math.min(...v), hi = Math.max(...v, lo + 5);
+    const lo = Math.min(...v), hi = Math.max(...v, lo + 20);
     const t0 = series[0][0], t1 = series[series.length - 1][0];
     const xs = (t) => 2 + ((t - t0) / (t1 - t0 || 1)) * (W - 4);
     const ys = (x) => 4 + (1 - (x - lo) / (hi - lo)) * (H - 8);
