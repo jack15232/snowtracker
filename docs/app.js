@@ -93,7 +93,7 @@
   function nowCard(obs) {
     const st = ((obs && obs.stations) || []).filter((x) => x.ok);
     if (!st.length) return "";
-    const short = { "Bocchetta delle Pisse": "Pisse", "Alagna Miniere": "Alagna", "Passo del Moro": "Passo Moro" };
+    const short = { "Bocchetta delle Pisse": "Pisse", "Alagna Miniere": "Alagna", "Passo del Moro": "Moro" };
     const sign = (v) => (v == null ? "–" : (v > 0 ? "+" : "") + Math.round(v));
     const order = ["Bocchetta delle Pisse", "Alagna Miniere", "Passo del Moro"];
     st.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
