@@ -49,7 +49,9 @@ SNOW_RAMP_M = 300
 # Fallback when FL is missing: fraction from band temperature (°C)
 T_ALL_SNOW, T_ALL_RAIN = -0.5, 2.0
 # Snow-to-liquid ratio by band temperature (°C -> ratio), linearly interpolated
-SLR_TABLE = [(-15, 18), (-10, 16), (-6, 13), (-3, 11), (0, 9), (1, 7), (3, 7)]
+# Conservative (~10:1 around -3°C, close to Alpine mean new-snow density ~100 kg/m3) until
+# calibrated against Bocchetta delle Pisse depth changes.
+SLR_TABLE = [(-15, 15), (-10, 13), (-6, 11), (-3, 10), (0, 8), (1, 7), (3, 7)]
 
 PROB_THRESHOLDS_CM = [10, 30]   # daily
 HEADLINE_THRESHOLD_CM = 20      # next-72h
