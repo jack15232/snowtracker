@@ -1,0 +1,48 @@
+name: update
+on:
+  schedule:
+    - cron: "*/15 * * * *"     # best effort; run.py --auto decides what is actually due
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Fetch everything now"
+        type: boolean
+        default: true
+permissions:
+  contents: write
+concurrency:
+  group: update
+  cancel-in-progress: false
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Restore state + recent raw archive
+        uses: actions/cache/restore@v4
+        with:
+          path: archive
+          key: snowcast-archive-${{ github.run_id }}
+          restore-keys: snowcast-archive-
+      - name: Fetch, build, publish
+        env:
+          SNOWCAST_KEEP_DAYS: "3"
+        run: |
+          git config user.name "snowcast-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.force }}" = "true" ]; then
+            python run.py --publish
+          else
+            python run.py --auto --publish
+          fi
+      - name: Save state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: archive
+          key: snowcast-archive-${{ github.run_id }}
