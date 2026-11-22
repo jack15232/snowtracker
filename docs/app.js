@@ -43,7 +43,7 @@
     const sources = [];
     if (REPO && !REPO.startsWith("__")) {
       sources.push(() => fetchJSON(`https://api.github.com/repos/${REPO}/contents/docs/data/summary.json?ref=main`,
-        { headers: { Accept: "application/vnd.github.raw" } }));
+        { headers: ghHeaders({ Accept: "application/vnd.github.raw" }) }));
     }
     sources.push(() => fetchJSON(`data/summary.json?t=${Date.now()}`));
     for (const src of sources) {
@@ -60,6 +60,50 @@
                   : "Couldn't load the forecast and nothing is saved yet. Check your connection.", "bad");
     }
     if (data) render();
+  }
+  const token = () => store.get("snowcast:token") || "";
+  function ghHeaders(h = {}) { const t = token(); return t ? { ...h, Authorization: `Bearer ${t}` } : h; }
+  function toast(msg, ms = 3500) {
+    let t = $("toast");
+    if (!t) { t = document.createElement("div"); t.id = "toast"; document.body.appendChild(t); }
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(t._h); if (ms) t._h = setTimeout(() => t.classList.remove("show"), ms);
+  }
+  let refreshing = false;
+  async function refresh() {
+    if (refreshing) return;
+    if (!token()) {
+      await load();
+      if (data) toast(`Latest data is from ${ago(data.generated_at)}. Updates run every ~15 min.`);
+      return;
+    }
+    refreshing = true;
+    const btn = $("refresh"); btn.classList.add("spin");
+    const before = data ? data.generated_at : 0;
+    try {
+      const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/update.yml/dispatches`, {
+        method: "POST", headers: ghHeaders({ Accept: "application/vnd.github+json", "Content-Type": "application/json" }),
+        body: JSON.stringify({ ref: "main", inputs: { force: "true" } }),
+      });
+      if (r.status === 401 || r.status === 403 || r.status === 404) {
+        toast("GitHub refused the saved key (expired or wrong permissions). Showing latest data instead.", 6000);
+        refreshing = false; btn.classList.remove("spin"); await load(); return;
+      }
+      if (!r.ok) throw new Error("GitHub " + r.status);
+      toast("Fetching new forecast and snow data… about 1–2 min", 0);
+      const t0 = Date.now();
+      while (Date.now() - t0 < 5 * 60 * 1000) {
+        await new Promise((res) => setTimeout(res, 15000));
+        await load();
+        btn.classList.add("spin");
+        if (data && data.generated_at > before) { toast("Updated just now ✓"); break; }
+      }
+      if (!data || data.generated_at <= before) toast("Still running on GitHub. Pull to refresh again in a minute.", 6000);
+    } catch (e) {
+      toast("Couldn't start a fresh fetch (" + e.message + "). Showing latest data.", 6000);
+      await load();
+    }
+    refreshing = false; btn.classList.remove("spin");
   }
   function banner(html, kind = "warn") {
     const b = $("banner");
@@ -83,11 +127,12 @@
     const hasFc = B.days.some((d) => d.snow);
     $("main").innerHTML = hasFc ? [
       heroCard(B), nowCard(s.obs), camsCard(s.webcams), daysCard(B), `<div class="card" id="timingCard"></div>`, `<div class="card" id="flCard"></div>`,
-      stationsCard(s.obs), avalancheCard(s.avalanche), `<div class="card" id="alertsCard"></div>`, modelsCard(s, B),
+      stationsCard(s.obs), avalancheCard(s.avalanche), `<div class="card" id="alertsCard"></div>`, liveCard(), modelsCard(s, B),
     ].join("") : `<div class="card empty">No forecast data yet. The first run on your Mac hasn't finished.</div>` +
       nowCard(s.obs) + camsCard(s.webcams) + stationsCard(s.obs) + avalancheCard(s.avalanche) + modelsCard(s, B);
     if (hasFc) { timingChart(B); flChart(s, B); }
     renderAlerts();
+    bindLive();
     $("footer").innerHTML = footer(s);
   }
 
@@ -178,6 +223,34 @@
       try { await navigator.clipboard.writeText(subJSON); $("copied").textContent = "Copied"; }
       catch { $("copied").innerHTML = `<textarea readonly style="width:100%;height:80px">${esc(subJSON)}</textarea>`; }
     };
+  }
+
+
+  function liveCard() {
+    const has = !!token();
+    const newTok = `https://github.com/settings/personal-access-tokens/new`;
+    return `<div class="card" id="liveCard"><h2>Live refresh</h2>
+      ${has ? `<div><b>On.</b> <span class="muted">The refresh button fetches brand-new data (about 1–2 min).</span></div>
+        <div style="margin-top:10px"><button class="btn small" id="tokDel" style="background:var(--surface-2);color:var(--text)">Remove key</button></div>`
+      : `<div class="muted" style="font-size:14px">Optional. Lets the refresh button run a new fetch instead of loading the last scheduled one.</div>
+        <ol class="steps"><li>Open <a href="${newTok}" target="_blank" rel="noopener" style="color:var(--snow)">new GitHub token</a>. Name it <code>snowtracker</code>, expiry 90 days.</li>
+        <li>Repository access: <b>Only select repositories → snowtracker</b>.</li>
+        <li>Permissions → Repository → <b>Actions: Read and write</b>. Generate, copy.</li>
+        <li><input id="tokIn" type="password" placeholder="Paste token here" autocomplete="off"
+          style="width:100%;font-size:16px;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--surface-2);color:var(--text)"></li></ol>
+        <button class="btn small" id="tokSave" style="margin-top:8px">Save on this phone</button>`}
+      <div class="axis-note">The key is stored only on this device and can only start this repo's update job.</div></div>`;
+  }
+  function bindLive() {
+    const sv = $("tokSave"), del = $("tokDel");
+    if (sv) sv.onclick = async () => {
+      const v = $("tokIn").value.trim();
+      if (!v) return;
+      const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/update.yml`, { headers: { Authorization: `Bearer ${v}` } }).catch(() => null);
+      if (!r || !r.ok) { toast("That key can't see the update job. Check repository access and Actions permission.", 6000); return; }
+      store.set("snowcast:token", v); toast("Saved. Refresh now fetches new data."); render();
+    };
+    if (del) del.onclick = () => { try { localStorage.removeItem("snowcast:token"); } catch {} render(); };
   }
 
   function heroCard(B) {
@@ -424,7 +497,7 @@
   }
 
   // ---------- events ----------
-  $("refresh").addEventListener("click", load);
+  $("refresh").addEventListener("click", refresh);
   $("bands").addEventListener("click", (e) => {
     const b = e.target.closest("button[data-band]");
     if (!b) return;

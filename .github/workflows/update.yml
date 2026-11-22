@@ -1,7 +1,7 @@
 name: update
 on:
   schedule:
-    - cron: "*/15 * * * *"     # best effort; run.py --auto decides what is actually due
+    - cron: "7,22,37,52 * * * *"   # off-peak minutes; run.py --auto decides what is actually due
   workflow_dispatch:
     inputs:
       force:

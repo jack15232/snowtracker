@@ -125,6 +125,8 @@ svg text{font-family:inherit}
 .btn.small{padding:9px 12px;min-height:36px;font-size:13.5px}
 .steps{margin:8px 0 0;padding-left:20px;font-size:14px;line-height:1.7}
 code{font:12.5px ui-monospace,Menlo,monospace;background:var(--surface-2);padding:1px 5px;border-radius:5px}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 18px);transform:translate(-50%,20px);max-width:92vw;background:var(--text);color:var(--bg);padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.35;opacity:0;transition:opacity .2s,transform .2s;pointer-events:none;z-index:9;text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
 footer{color:var(--text-3);font-size:12px;line-height:1.5;padding:4px 4px 0}
 footer a{color:inherit}
 .empty{padding:40px 10px;text-align:center;color:var(--text-2)}
