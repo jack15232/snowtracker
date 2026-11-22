@@ -165,6 +165,13 @@ def main():
     print(f"models ok: {ok}  |  2400m next 72h: "
           + (f"{h['p50']} cm (P10-P90 {h['p10']}-{h['p90']}), P(>20cm)={h['p_gt20']}" if h else "n/a"))
 
+    if results:
+        try:
+            from snowcast import alerts
+            alerts.process(out)
+        except Exception as e:
+            print("alerts: error", e, file=sys.stderr)
+
     if a.publish:
         from publish import publish
         publish()

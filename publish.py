@@ -13,6 +13,8 @@ def git(*args, check=True):
 
 def publish():
     git("add", "docs/data/summary.json")
+    if (ROOT / "alerts" / "sent.json").exists():
+        git("add", "alerts/sent.json")
     if git("diff", "--cached", "--quiet", check=False).returncode == 0:
         print("publish: no change")
         return

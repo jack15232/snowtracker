@@ -3,6 +3,7 @@
   const TZ = "Europe/Rome";
   const REPO = (document.querySelector('meta[name="snowcast-repo"]') || {}).content || "";
   const STALE_MIN = 90;
+  const VAPID_PUBLIC = "BPSUYGeNsvn75sOY5KT9nCcF-BuVLCz-q-TzyQEAH6gJ3LhR0Lp0KpMcjDLv_b41FqtTaEglmGscZxsGpw6HWuY";
   const $ = (id) => document.getElementById(id);
   const store = {
     get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -82,10 +83,11 @@
     const hasFc = B.days.some((d) => d.snow);
     $("main").innerHTML = hasFc ? [
       heroCard(B), nowCard(s.obs), camsCard(s.webcams), daysCard(B), `<div class="card" id="timingCard"></div>`, `<div class="card" id="flCard"></div>`,
-      stationsCard(s.obs), avalancheCard(s.avalanche), modelsCard(s, B),
+      stationsCard(s.obs), avalancheCard(s.avalanche), `<div class="card" id="alertsCard"></div>`, modelsCard(s, B),
     ].join("") : `<div class="card empty">No forecast data yet. The first run on your Mac hasn't finished.</div>` +
       nowCard(s.obs) + camsCard(s.webcams) + stationsCard(s.obs) + avalancheCard(s.avalanche) + modelsCard(s, B);
     if (hasFc) { timingChart(B); flChart(s, B); }
+    renderAlerts();
     $("footer").innerHTML = footer(s);
   }
 
@@ -120,6 +122,62 @@
     return `<div class="card"><h2>Webcams <span class="note">swipe · tap to open</span></h2>
       <div class="cams">${cams}</div>
       <div class="axis-note"><a href="${esc(w.index)}" target="_blank" rel="noopener" style="color:var(--snow)">All Monterosa Ski webcams</a></div></div>`;
+  }
+
+
+  // ---------- push alerts ----------
+  const b64ToBytes = (b) => {
+    const pad = "=".repeat((4 - (b.length % 4)) % 4);
+    const raw = atob((b + pad).replace(/-/g, "+").replace(/_/g, "/"));
+    return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+  };
+  const standalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  let subJSON = null;
+  async function alertState() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      return /iPhone|iPad/.test(navigator.userAgent) && !standalone() ? "install" : "unsupported";
+    }
+    if (Notification.permission === "denied") return "denied";
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) { subJSON = JSON.stringify(sub); return "on"; }
+    return "off";
+  }
+  async function enableAlerts() {
+    const perm = await Notification.requestPermission();
+    if (perm !== "granted") return renderAlerts();
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID_PUBLIC) });
+    subJSON = JSON.stringify(sub);
+    store.set("snowcast:sub", subJSON);
+    renderAlerts();
+  }
+  async function renderAlerts() {
+    const el = $("alertsCard");
+    if (!el) return;
+    let st;
+    try { st = await alertState(); } catch { st = "unsupported"; }
+    const rule = `You'll get a notification when any day in the next week is forecast 10cm+ at 2400m (50%+ chance), and again if it becomes a 30cm+ day.`;
+    const secrets = REPO && !REPO.startsWith("__") ? `https://github.com/${REPO}/settings/secrets/actions` : "#";
+    const body = {
+      install: `<div class="muted">On iPhone, alerts only work from the Home Screen app: tap Share → Add to Home Screen, then open it from there.</div>`,
+      unsupported: `<div class="muted">This browser can't receive web notifications.</div>`,
+      denied: `<div class="muted">Notifications are blocked for this app. Turn them on in Settings → Notifications → Alagna Snow.</div>`,
+      off: `<button class="btn" id="enableAlerts">Turn on snow alerts</button>`,
+      on: `<div><b>On for this device.</b> <span class="muted">If you haven't yet, finish setup once:</span></div>
+        <ol class="steps"><li><button class="btn small" id="copySub">Copy setup code</button> <span id="copied" class="muted"></span></li>
+        <li>Open <a href="${secrets}" target="_blank" rel="noopener" style="color:var(--snow)">repo secrets</a> → <b>New repository secret</b></li>
+        <li>Name <code>PUSH_SUBSCRIPTION</code>, paste, Save.</li></ol>
+        <div class="axis-note">To check it works: <a href="https://github.com/${REPO}/actions/workflows/update.yml" target="_blank" rel="noopener" style="color:var(--snow)">Run workflow</a> with "Send a test notification" ticked.</div>`,
+    }[st];
+    el.innerHTML = `<h2>Snow alerts</h2>${body}<div class="axis-note">${rule}</div>`;
+    const en = $("enableAlerts");
+    if (en) en.onclick = () => enableAlerts().catch((e) => { el.insertAdjacentHTML("beforeend", `<div class="muted">Couldn't turn on: ${esc(e.message)}</div>`); });
+    const cp = $("copySub");
+    if (cp) cp.onclick = async () => {
+      try { await navigator.clipboard.writeText(subJSON); $("copied").textContent = "Copied"; }
+      catch { $("copied").innerHTML = `<textarea readonly style="width:100%;height:80px">${esc(subJSON)}</textarea>`; }
+    };
   }
 
   function heroCard(B) {

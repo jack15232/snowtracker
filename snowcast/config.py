@@ -93,3 +93,10 @@ WEBCAMS = [
      "page": "https://monterosaski.eu/en/webcam/seggiovia-cimalegna-webcam-20747"},
 ]
 WEBCAM_INDEX = "https://monterosaski.eu/en/webcam"
+
+# ---- push alerts ------------------------------------------------------------
+ALERT_BAND = "2400"
+ALERT_PROB = 0.5          # alert when P(day > 10 cm) >= this; "big day" when P(> 30 cm) >= this
+ALERT_CONTACT = "mailto:snowtracker@users.noreply.github.com"
+VAPID_PUBLIC_KEY = "BPSUYGeNsvn75sOY5KT9nCcF-BuVLCz-q-TzyQEAH6gJ3LhR0Lp0KpMcjDLv_b41FqtTaEglmGscZxsGpw6HWuY"
+TRIP_START, TRIP_END = "2026-12-12", "2026-12-19"
