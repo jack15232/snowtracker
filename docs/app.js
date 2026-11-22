@@ -75,16 +75,16 @@
     if (stale && !$("banner").classList.contains("bad")) {
       banner(`Your Mac hasn't published since ${fDayHour.format(s.generated_at * 1000)} (Alagna time). It may be asleep or offline, so these numbers are getting old.`, "warn");
     }
-    $("now").innerHTML = nowCard(s.obs) + camsCard(s.webcams);
+    $("now").innerHTML = "";
     $("bands").innerHTML = Object.entries(s.bands).map(([id, b]) =>
       `<button data-band="${id}" aria-pressed="${id === band}">${b.elev}m</button>`).join("");
     const B = s.bands[band];
     const hasFc = B.days.some((d) => d.snow);
     $("main").innerHTML = hasFc ? [
-      heroCard(B), daysCard(B), `<div class="card" id="timingCard"></div>`, `<div class="card" id="flCard"></div>`,
+      heroCard(B), nowCard(s.obs), camsCard(s.webcams), daysCard(B), `<div class="card" id="timingCard"></div>`, `<div class="card" id="flCard"></div>`,
       stationsCard(s.obs), avalancheCard(s.avalanche), modelsCard(s, B),
     ].join("") : `<div class="card empty">No forecast data yet. The first run on your Mac hasn't finished.</div>` +
-      stationsCard(s.obs) + avalancheCard(s.avalanche) + modelsCard(s, B);
+      nowCard(s.obs) + camsCard(s.webcams) + stationsCard(s.obs) + avalancheCard(s.avalanche) + modelsCard(s, B);
     if (hasFc) { timingChart(B); flChart(s, B); }
     $("footer").innerHTML = footer(s);
   }
