@@ -3,6 +3,7 @@
   const TZ = "Europe/Rome";
   const REPO = (document.querySelector('meta[name="snowcast-repo"]') || {}).content || "";
   const STALE_MIN = 90;
+  const NTFY = "https://ntfy.sh/snowtracker-hpue6b4ugsklyjv2";
   const VAPID_PUBLIC = "BPSUYGeNsvn75sOY5KT9nCcF-BuVLCz-q-TzyQEAH6gJ3LhR0Lp0KpMcjDLv_b41FqtTaEglmGscZxsGpw6HWuY";
   const $ = (id) => document.getElementById(id);
   const store = {
@@ -70,40 +71,69 @@
     clearTimeout(t._h); if (ms) t._h = setTimeout(() => t.classList.remove("show"), ms);
   }
   let refreshing = false;
-  async function refresh() {
-    if (refreshing) return;
-    if (!token()) {
+  async function waitForNew(before, msg) {
+    toast(msg, 0);
+    const t0 = Date.now();
+    while (Date.now() - t0 < 4 * 60 * 1000) {
+      await new Promise((res) => setTimeout(res, 10000));
       await load();
-      if (data) toast(`Latest data is from ${ago(data.generated_at)}. Updates run every ~15 min.`);
-      return;
+      $("refresh").classList.add("spin");
+      if (data && data.generated_at > before) { toast("Updated just now ✓"); return true; }
     }
+    toast("Still running on GitHub. Tap refresh again in a minute.", 6000);
+    return false;
+  }
+  // Ask the Mac agent (via ntfy.sh) to start an update. Resolves ack | busy | err | timeout | noconn.
+  function askMac(timeoutMs = 8000) {
+    return new Promise((resolve) => {
+      const id = Math.random().toString(36).slice(2, 10);
+      let es, done = false, sent = false;
+      const finish = (v) => { if (done) return; done = true; try { es && es.close(); } catch {} resolve(v); };
+      try { es = new EventSource(`${NTFY}/sse`); } catch { return resolve("noconn"); }
+      es.onopen = () => {
+        if (sent) return; sent = true;
+        fetch(NTFY, { method: "POST", body: `refresh:${id}` }).catch(() => finish("noconn"));
+      };
+      es.onmessage = (e) => {
+        try {
+          const m = (JSON.parse(e.data).message || "").trim();
+          const i = m.indexOf(":");
+          if (i > 0 && m.slice(i + 1) === id && m.slice(0, i) !== "refresh") finish(m.slice(0, i));
+        } catch {}
+      };
+      setTimeout(() => finish(sent ? "timeout" : "noconn"), timeoutMs);
+    });
+  }
+  async function refresh(opts = {}) {
+    if (refreshing) return;
     refreshing = true;
     const btn = $("refresh"); btn.classList.add("spin");
     const before = data ? data.generated_at : 0;
     try {
-      const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/update.yml/dispatches`, {
-        method: "POST", headers: ghHeaders({ Accept: "application/vnd.github+json", "Content-Type": "application/json" }),
-        body: JSON.stringify({ ref: "main", inputs: { force: "true" } }),
-      });
-      if (r.status === 401 || r.status === 403 || r.status === 404) {
-        toast("GitHub refused the saved key (expired or wrong permissions). Showing latest data instead.", 6000);
-        refreshing = false; btn.classList.remove("spin"); await load(); return;
+      if (token()) {
+        const r = await fetch(`https://api.github.com/repos/${REPO}/actions/workflows/update.yml/dispatches`, {
+          method: "POST", headers: ghHeaders({ Accept: "application/vnd.github+json", "Content-Type": "application/json" }),
+          body: JSON.stringify({ ref: "main", inputs: { force: "true" } }),
+        });
+        if (r.ok) { await waitForNew(before, "Fetching new forecast and snow data… about 1 min"); return; }
+        if (!opts.auto) toast("GitHub refused the saved key, so asking your Mac instead…", 3000);
       }
-      if (!r.ok) throw new Error("GitHub " + r.status);
-      toast("Fetching new forecast and snow data… about 1–2 min", 0);
-      const t0 = Date.now();
-      while (Date.now() - t0 < 5 * 60 * 1000) {
-        await new Promise((res) => setTimeout(res, 15000));
-        await load();
-        btn.classList.add("spin");
-        if (data && data.generated_at > before) { toast("Updated just now ✓"); break; }
+      if (!opts.auto) toast("Asking your Mac to update…", 0);
+      const ans = await askMac();
+      if (ans === "ack" || ans === "busy") {
+        await waitForNew(before, ans === "ack" ? "Your Mac started an update… about 1 min" : "An update is already running… about 1 min");
+        return;
       }
-      if (!data || data.generated_at <= before) toast("Still running on GitHub. Pull to refresh again in a minute.", 6000);
-    } catch (e) {
-      toast("Couldn't start a fresh fetch (" + e.message + "). Showing latest data.", 6000);
       await load();
+      if (!opts.auto) toast(ans === "err"
+        ? "Your Mac got the request but couldn't start the update. Check its GitHub login."
+        : `Your Mac didn't answer (asleep or offline). Showing data from ${data ? ago(data.generated_at) : "earlier"}.`, 6500);
+    } catch (e) {
+      await load();
+      if (!opts.auto) toast("Couldn't refresh (" + e.message + "). Showing latest data.", 6000);
+    } finally {
+      refreshing = false; btn.classList.remove("spin");
     }
-    refreshing = false; btn.classList.remove("spin");
   }
   function banner(html, kind = "warn") {
     const b = $("banner");
@@ -229,10 +259,10 @@
   function liveCard() {
     const has = !!token();
     const newTok = `https://github.com/settings/personal-access-tokens/new`;
-    return `<div class="card" id="liveCard"><h2>Live refresh</h2>
+    return `<div class="card" id="liveCard"><h2>Refresh without the Mac</h2>
       ${has ? `<div><b>On.</b> <span class="muted">The refresh button fetches brand-new data (about 1–2 min).</span></div>
         <div style="margin-top:10px"><button class="btn small" id="tokDel" style="background:var(--surface-2);color:var(--text)">Remove key</button></div>`
-      : `<div class="muted" style="font-size:14px">Optional. Lets the refresh button run a new fetch instead of loading the last scheduled one.</div>
+      : `<div class="muted" style="font-size:14px">Refresh goes through your Mac when it's awake. Optional: save a key so refresh also works while the Mac is asleep.</div>
         <ol class="steps"><li>Open <a href="${newTok}" target="_blank" rel="noopener" style="color:var(--snow)">new GitHub token</a>. Name it <code>snowtracker</code>, expiry 90 days.</li>
         <li>Repository access: <b>Only select repositories → snowtracker</b>.</li>
         <li>Permissions → Repository → <b>Actions: Read and write</b>. Generate, copy.</li>
@@ -519,6 +549,6 @@
   data = store.get("snowcast:last");
   if (data) render();
   // With a live-refresh key, opening the app on stale data (>30 min) starts a fresh fetch itself.
-  const autoRefresh = () => { if (token() && data && Date.now() / 1000 - data.generated_at > 30 * 60) refresh(); };
+  const autoRefresh = () => { if (data && Date.now() / 1000 - data.generated_at > 30 * 60) refresh({ auto: true }); };
   load().then(autoRefresh);
 })();
